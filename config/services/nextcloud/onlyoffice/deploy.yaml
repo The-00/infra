@@ -1,0 +1,83 @@
+apiVersion: v1
+data:
+  JWT_ENABLED: "true"
+  JWT_SECRET: "onlyoffice_token"
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  labels:
+    app: onlyoffice-app
+  name: onlyoffice-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: onlyoffice-app
+  name: onlyoffice-deploy
+spec:
+  selector:
+    matchLabels:
+      app: onlyoffice-app
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: onlyoffice-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: onlyoffice-config
+                optional: false
+          image: onlyoffice/documentserver
+          name: onlyoffice-worker
+          resources: {}
+          readinessProbe:
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      restartPolicy: Always
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: onlyoffice
+  labels:
+    app: onlyoffice-app
+spec:
+  selector:
+    app: onlyoffice-app
+  type: NodePort
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: onlyoffice-ingress
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+  labels:
+    app: onlyoffice-app
+spec:
+  rules:
+    - host: office.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: onlyoffice
+              servicePort: http

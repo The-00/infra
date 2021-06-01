@@ -1,0 +1,61 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: postfix
+  namespace: mailserver
+  labels:
+    app: postfix-app
+data:
+  TX_SMTP_RELAY_HOST:       'mail.gandi.net:587'
+  TX_SMTP_RELAY_MYHOSTNAME: 'mail.trova.fr'
+  TX_SMTP_RELAY_USERNAME:   'root@trova.fr'
+  TX_SMTP_RELAY_PASSWORD:   'relay_password'
+  TX_SMTP_RELAY_NETWORKS:   '0.0.0.0/0'
+  POSTFIX_CUSTOM_CONFIG:    ''
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postfix
+  namespace: mailserver
+  labels:
+    app: postfix-app
+spec:
+  selector:
+    app: postfix-app
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    - name: smtp
+      protocol: TCP
+      port: 25
+      targetPort: 25
+    - name: smtps
+      protocol: TCP
+      port: 587
+      targetPort: 25
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postfix
+  namespace: mailserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postfix-app
+  template:
+    metadata:
+      labels:
+        app: postfix-app
+    spec:
+      containers:
+      - name: postfix
+        image: mailserver/postfix-relay
+        imagePullPolicy: Never
+        envFrom:
+          - configMapRef:
+              name: postfix

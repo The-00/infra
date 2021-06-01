@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juice-shop-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juice-shop-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: juice-shop-app
+    spec:
+      containers:
+        - envFrom:
+          image: bkimminich/juice-shop
+          name: juice-shop-worker
+          resources: {}
+      restartPolicy: Always
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: juice-shop
+  labels:
+    app: juice-shop-app
+spec:
+  selector:
+    app: juice-shop-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3000
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: juice-shop-ingress
+  labels:
+    app: juice-shop-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.frontend.redirect.entryPoint: http
+spec:
+  rules:
+    - host: juice-shop.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: juice-shop
+              servicePort: http
+---

@@ -1,0 +1,103 @@
+apiVersion: v1
+data:
+  DB_0_NAME: nextcloud
+  DB_0_PASS: nextcloud_pass
+  ROOT_PASSWORD: root_pass
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  labels:
+    app: mariadb-app
+  name: mariadb-config
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mariadb-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: mariadb-config
+                optional: false
+          image: dotriver/mariadb
+          name: mariadb-worker
+          resources: {}
+          volumeMounts:
+            - mountPath: /var/lib/mysql-backup/
+              name: backup
+            - mountPath: /var/lib/mysql/
+              name: data
+          readinessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 15
+            periodSeconds: 20      
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/mariadb/backup/
+            type: DirectoryOrCreate
+          name: backup
+        - hostPath:
+            path: /mnt/data/default/mariadb/data/
+            type: DirectoryOrCreate
+          name: data
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: mariadb
+  labels:
+    app: mariadb-app
+spec:
+  selector:
+    app: mariadb-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+    - name: mysql
+      protocol: TCP
+      port: 3306
+      targetPort: 3306
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: mariadb-ingress
+  labels:
+    app: mariadb-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.frontend.redirect.entryPoint: http
+spec:
+  rules:
+    - host: pma.nc.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: mariadb
+              servicePort: http
+---

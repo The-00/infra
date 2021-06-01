@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: homer-app
+  name: homer-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homer-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: homer-app
+    spec:
+      containers:
+        - image: b4bz/homer
+          name: homer-worker
+          resources: {}
+          volumeMounts:
+            - mountPath: /www/assets
+              name: config
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/homer/config/
+            type: ""
+          name: config
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: homer
+  labels:
+    app: homer-app
+spec:
+  selector:
+    app: homer-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: homer-ingress
+  labels:
+    app: homer-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: homer
+              servicePort: http
+---
+

@@ -1,0 +1,89 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+spec:
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      containers:
+      - env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        image: jellyfin/jellyfin:latest
+        imagePullPolicy: Always
+        name: jellyfin
+        ports:
+        - containerPort: 8096
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /data/media
+          name: media
+          readOnly: True
+        - mountPath: /config
+          name: jellyfin-config
+      restartPolicy: Always
+      volumes:
+      - name: media
+        hostPath:
+          path: /mnt/media
+          type: ""
+      - name: jellyfin-config
+        hostPath:
+          path: /mnt/data/default/jellyfin/config
+          type: ""
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: jellyfin
+  name: jellyfin
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 8096
+  selector:
+    app: jellyfin
+  type: ClusterIP
+---
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: jellyfin-ingress
+  labels:
+    app: jellyfin
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: media.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: jellyfin
+              servicePort: http

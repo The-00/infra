@@ -1,0 +1,88 @@
+apiVersion: v1
+data:
+  PUID: "101"
+  PGID: "102"
+  TZ: Europe/Paris
+kind: ConfigMap
+metadata:
+  labels:
+    app: jackett-app
+  name: jackett-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: jackett-app
+  name: jackett-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jackett-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: jackett-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: jackett-config
+                optional: false
+          image: linuxserver/jackett:latest
+          name: jackett-worker
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /downloads
+              name: torrent
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/jackett/config/
+            type: ""
+          name: config
+        - hostPath:
+            path: /mnt/media/Torrents
+            type: ""
+          name: torrent
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: jackett
+  labels:
+    app: jackett-app
+spec:
+  selector:
+    app: jackett-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 9117
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: jackett-ingress
+  labels:
+    app: jackett-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: jackett.media.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: jackett
+              servicePort: http
+---
+

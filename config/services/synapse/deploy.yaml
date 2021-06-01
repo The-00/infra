@@ -1,0 +1,119 @@
+apiVersion: v1
+data:
+  SYNAPSE_SERVER_NAME: "trova.fr"
+  SYNAPSE_ROOT_USER: "admin"
+  SYNAPSE_ROOT_PASSWORD: "admin_pass"
+  SYNAPSE_CONFIG_DIR: /data
+  SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+  SYNAPSE_LDAP_HOST: "fusiondirectory"
+  SYNAPSE_LDAP_BASE_DN: "dc=trova,dc=fr"
+  SYNAPSE_LDAP_BIND_PASS: "admin_pass"
+  SYNAPSE_LDAP_GROUP: "cn=chat,ou=groups,dc=trova,dc=fr"
+  SYNAPSE_ENABLE_REGISTRATION: "false"
+  SYNAPSE_ALLOW_GUEST: "true"
+  SYNAPSE_REPORT_STATS: "false"
+  SYNAPSE_NO_TLS: "true"
+  SYNAPSE_TURN_URIS: "stun.l.google.com:19302,stun1.l.google.om:19302,stun2.l.google.com:19302,stun3.l.google.com:19302,stun4.l.google.com:19302"
+  SYNAPSE_WELL_KNOWN_SERVER: '{"m.server": "trova.fr:443"}'
+kind: ConfigMap
+metadata:
+  labels:
+    app: synapse-app
+  name: synapse-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: synapse-app
+  name: synapse-deploy
+spec:
+  selector:
+    matchLabels:
+      app: synapse-app
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: synapse-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: synapse-config
+                optional: false
+          image: dotriver/synapse
+          name: synapse-worker
+          resources: {}
+          readinessProbe:
+            tcpSocket:
+              port: 8008
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8008
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - mountPath: /data
+              name: data
+            - mountPath: /synapse/lib/python3.8/site-packages/synapse/static/.well-known/matrix/
+              name: config
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/synapse/
+            type: ""
+          name: data
+        - name: config
+          configMap:
+            name: synapse-config
+            items:
+              - key: SYNAPSE_WELL_KNOWN_SERVER
+                path: server 
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: synapse
+  labels:
+    app: synapse-app
+spec:
+  selector:
+    app: synapse-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8008
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: synapse-ingress
+  labels:
+    app: synapse-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/request-modifier: "ReplacePathRegex: ^/.well-known/matrix/(.*) /_matrix/static/.well-known/matrix/$1"
+spec:
+  rules:
+    - host: trova.fr
+      http:
+        paths:
+          - path: /_matrix
+            backend:
+              serviceName: synapse
+              servicePort: http
+          - path: /_synapse
+            backend:
+              serviceName: synapse
+              servicePort: http
+          - path: /.well-known/matrix
+            backend:
+              serviceName: synapse
+              servicePort: http

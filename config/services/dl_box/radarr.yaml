@@ -1,0 +1,94 @@
+apiVersion: v1
+data:
+  PUID: "101"
+  PGID: "102"
+  TZ: Europe/Paris
+kind: ConfigMap
+metadata:
+  labels:
+    app: radarr-app
+  name: radarr-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radarr-app
+  name: radarr-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radarr-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: radarr-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: radarr-config
+                optional: false
+          image: linuxserver/radarr:latest
+          name: radarr-worker
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /movies
+              name: movies
+            - mountPath: /downloads
+              name: torrent
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/radarr/config/
+            type: ""
+          name: config
+        - hostPath:
+            path: /mnt/media/Torrents/completed
+            type: ""
+          name: torrent
+        - hostPath:
+            path: /mnt/media/Films/
+            type: ""
+          name: movies
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: radarr
+  labels:
+    app: radarr-app
+spec:
+  selector:
+    app: radarr-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 7878
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: radarr-ingress
+  labels:
+    app: radarr-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: radarr.media.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: radarr
+              servicePort: http
+---
+

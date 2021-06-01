@@ -1,0 +1,94 @@
+apiVersion: v1
+data:
+  PUID: "101"
+  PGID: "102"
+  TZ: Europe/Paris
+kind: ConfigMap
+metadata:
+  labels:
+    app: sonarr-app
+  name: sonarr-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: sonarr-app
+  name: sonarr-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarr-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: sonarr-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: sonarr-config
+                optional: false
+          image: linuxserver/sonarr:latest
+          name: sonarr-worker
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /tv
+              name: series
+            - mountPath: /downloads
+              name: torrent
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/sonarr/config/
+            type: ""
+          name: config
+        - hostPath:
+            path: /mnt/media/Torrents/
+            type: ""
+          name: torrent
+        - hostPath:
+            path: /mnt/media/Series/
+            type: ""
+          name: series
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: sonarr
+  labels:
+    app: sonarr-app
+spec:
+  selector:
+    app: sonarr-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8989
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: sonarr-ingress
+  labels:
+    app: sonarr-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: sonarr.media.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: sonarr
+              servicePort: http
+---
+

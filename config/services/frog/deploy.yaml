@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frog
+  labels:
+    app: frog-app
+spec:
+  selector:
+    app: frog-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frog-app
+  template:
+    metadata:
+      labels:
+        app: frog-app
+    spec:
+      containers:
+      - name: frog
+        image: ttrova/images:frog
+        imagePullPolicy: Always
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: frog-ingress
+  labels:
+    app: frog-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: frog.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: frog
+              servicePort: http

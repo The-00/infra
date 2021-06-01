@@ -1,0 +1,18 @@
+# create role
+
+kubectl apply -f deploy.yaml
+
+# get token
+
+SERVICE_ACCOUNT=read-only-user
+SECRET=$(kubectl get serviceaccount ${SERVICE_ACCOUNT} -o json | jq -Mr '.secrets[].name | select(contains("token"))')
+TOKEN=$(kubectl get secret ${SECRET} -o json | jq -Mr '.data.token' | base64 -d)
+APISERVER=https://$(kubectl -n default get endpoints kubernetes --no-headers | awk '{ print $2 }')
+
+# use token
+
+curl -sSk -H "Authorization: Bearer $KUBE_TOKEN" https://$APISERVER/apis/networking.k8s.io/v1/namespaces/default/ingresses
+curl -sSk -H "Authorization: Bearer $KUBE_TOKEN" https://$APISERVER/api/v1/namespaces/default/pods
+curl -sSk -H "Authorization: Bearer $KUBE_TOKEN" https://$APISERVER/api/v1/namespaces/default/nodes
+
+

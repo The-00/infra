@@ -1,0 +1,113 @@
+apiVersion: v1
+data:
+  ADMIN_PASS: admin_pass
+  CONFIG_PASS: admin_pass
+  DOMAIN: trova.fr
+  FD_ADMIN: admin
+  FD_PASS: fusion_pass
+  INSTANCE: TROVA
+  SMTP_FROM: root@trova.fr
+  SMTP_HOST: mail.gandi.net
+  SMTP_PASS: "smtp_pass"
+  SMTP_USER: root@trova.fr
+  MAIL_LOGO: https://unicolo.re/api/frog.png
+  PLUGIN_MAIL: "TRUE"
+  PLUGIN_POSTFIX: "TRUE"
+  PLUGIN_DOVECOT: "TRUE"
+  PLUGIN_QUOTA: "TRUE"
+  PLUGIN_SPAMASSASSIN: "TRUE"
+kind: ConfigMap
+metadata:
+  labels:
+    app: fusiondirectory-app
+  name: fusiondirectory-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: fusiondirectory-app
+  name: fusiondirectory-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fusiondirectory-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: fusiondirectory-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: fusiondirectory-config
+                optional: false
+          image: dotriver/fusiondirectory
+          name: fusiondirectory-worker
+          resources: {}
+          volumeMounts:
+            - mountPath: /var/lib/openldap/
+              name: data
+            - mountPath: /etc/openldap/slapd.d/
+              name: config
+          readinessProbe:
+            tcpSocket:
+              port: 389
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 389
+            initialDelaySeconds: 15
+            periodSeconds: 20      
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/fusiondirectory/data/
+            type: DirectoryOrCreate
+          name: data
+        - hostPath:
+            path: /mnt/data/default/fusiondirectory/config/
+            type: DirectoryOrCreate
+          name: config
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: fusiondirectory
+  labels:
+    app: fusiondirectory-app
+spec:
+  selector:
+    app: fusiondirectory-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+    - name: ldap
+      protocol: TCP
+      port: 389
+      targetPort: 389
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: fusiondirectory-ingress
+  labels:
+    app: fusiondirectory-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: auth.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: fusiondirectory
+              servicePort: http

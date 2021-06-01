@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: focalboard
+  labels:
+    app: focalboard-app
+spec:
+  selector:
+    app: focalboard-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8000
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: focalboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: focalboard-app
+  template:
+    metadata:
+      labels:
+        app: focalboard-app
+    spec:
+      containers:
+      - name: focalboard
+        image: ttrova/images:focalboard
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: focalboard-ingress
+  labels:
+    app: focalboard-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: focalboard.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: focalboard
+              servicePort: http

@@ -1,0 +1,82 @@
+apiVersion: v1
+data:
+  PUID: "101"
+  PGID: "102"
+  TZ: "Europe/Paris"
+kind: ConfigMap
+metadata:
+  labels:
+    app: ombi-app
+  name: ombi-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ombi-app
+  name: ombi-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ombi-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: ombi-app
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: ombi-config
+                optional: false
+          image: linuxserver/ombi:latest
+          name: ombi-worker
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /mnt/data/default/ombi/config/
+            type: ""
+          name: config
+status: {}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ombi
+  labels:
+    app: ombi-app
+spec:
+  selector:
+    app: ombi-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3579
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ombi-ingress
+  labels:
+    app: ombi-app
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  rules:
+    - host: request.media.trova.fr
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: ombi
+              servicePort: http
+---
+
